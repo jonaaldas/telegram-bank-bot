@@ -1,4 +1,5 @@
 const express = require('express');
+const axios = require('axios');
 require('dotenv').config();
 const {
 	Configuration,
@@ -102,7 +103,6 @@ app.post('/api/set_access_token', function (request, response, next) {
 			const tokenResponse = await client.itemPublicTokenExchange({
 				public_token: PUBLIC_TOKEN,
 			});
-			console.log('🚀 ~ file: index.js:105 ~ tokenResponse:', tokenResponse);
 
 			// save data in a database link to user
 			ACCESS_TOKEN = tokenResponse.data.access_token;
@@ -123,7 +123,7 @@ app.post('/api/set_access_token', function (request, response, next) {
 		.catch(next);
 });
 
-app.get('/api/transactions', function (request, response, next) {
+app.post('/api/transactions', async function (request, response, next) {
 	Promise.resolve()
 		.then(async function () {
 			// Set cursor to empty to receive all historical updates
@@ -182,6 +182,23 @@ app.post('/api/accounts/get', function (request, response, next) {
 			}
 		})
 		.catch(next);
+});
+
+app.post('/api/item/get', function (request, response, next) {
+	Promise.resolve().then(async function () {
+		const request = {
+			access_token: ACCESS_TOKEN,
+		};
+		try {
+			const res = await client.itemGet(request);
+			const item = res.data.item;
+			const status = res.data.status;
+			response.json(item);
+		} catch (error) {
+			// handle error
+			console.log(error);
+		}
+	});
 });
 
 app.listen(port, () => {

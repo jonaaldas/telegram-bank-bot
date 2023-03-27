@@ -36,13 +36,19 @@ function App() {
 	const getTransactions = async () => {
 		const data = await axios.post('http://localhost:9000/api/transactions');
 		console.log('🚀 ~ file: App.jsx:28 ~ getTransactions ~ data:', data);
-		console.table(data?.latest_transactions);
 	};
+
 	const getBankAccounts = async () => {
 		await axios
 			.post('http://localhost:9000/api/accounts/get', {
 				data: banks[0].access_token,
 			})
+			.then((data) => console.log(data));
+	};
+
+	const getInstitutionInfo = async () => {
+		await axios
+			.post('http://localhost:9000/api/item/get')
 			.then((data) => console.log(data));
 	};
 
@@ -66,6 +72,7 @@ function App() {
 			</button>
 			<button onClick={() => getTransactions()}>Get my transactions</button>
 			<button onClick={() => getBankAccounts()}>Get my account info</button>
+			<button onClick={() => getInstitutionInfo()}>Get my Bank Info</button>
 		</div>
 	);
 }
