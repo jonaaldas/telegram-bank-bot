@@ -12,6 +12,8 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const mysql = require('mysql');
 const app = express();
+const moment = require('moment');
+const CircularJSON = require('circular-json');
 app.use(
 	bodyParser.urlencoded({
 		extended: false,
@@ -107,17 +109,23 @@ app.post('/api/set_access_token', function (request, response, next) {
 			// save data in a database link to user
 			ACCESS_TOKEN = tokenResponse.data.access_token;
 			ITEM_ID = tokenResponse.data.item_id;
+			const request = {
+				access_token: ACCESS_TOKEN,
+			};
+			const bankInfo = await client.itemGet(request);
 			// 	connection.query(
 			// 		`
 			// 		INSERT INTO bank_info.bank_token (bank_name, access_token, item_id)
 			// VALUES ('${title}', '${body}', ${id})
 			// 		`
 			// 	);
+			let information = JSON.parse(CircularJSON.stringify(bankInfo));
 			response.json({
 				// the 'access_token' is a private token, DO NOT pass this token to the frontend in your production environment
 				access_token: ACCESS_TOKEN,
 				item_id: ITEM_ID,
 				error: null,
+				...information.data.item,
 			});
 		})
 		.catch(next);
@@ -126,40 +134,51 @@ app.post('/api/set_access_token', function (request, response, next) {
 app.post('/api/transactions', async function (request, response, next) {
 	Promise.resolve()
 		.then(async function () {
-			// Set cursor to empty to receive all historical updates
-			let cursor = null;
+			const request = {
+				access_token: ACCESS_TOKEN,
+				cursor: null,
+			};
+			const res = await client.transactionsSync(request);
+			const data = res.data.added;
+			let date = moment(new Date()).subtract(1, 'day').format('YYYY-MM-DD');
+			let currentTransaction = data.filter(
+				(transaction) => transaction.authorized_date === date
+			);
+			response.json(currentTransaction);
+			// // Set cursor to empty to receive all historical updates
+			// let cursor = null;
 
-			// New transaction updates since "cursor"
-			let added = [];
-			let modified = [];
-			// Removed transaction ids
-			let removed = [];
-			let hasMore = true;
-			// Iterate through each page of new transaction updates for item
-			while (hasMore) {
-				const request = {
-					access_token: ACCESS_TOKEN,
-					cursor: cursor,
-				};
-				const response = await client.transactionsSync(request);
-				const data = response.data;
-				// Add this page of results
-				added = added.concat(data.added);
-				modified = modified.concat(data.modified);
-				removed = removed.concat(data.removed);
-				hasMore = data.has_more;
-				// Update cursor to the next cursor
-				cursor = data.next_cursor;
-				// prettyPrintResponse(response);
-			}
+			// // New transaction updates since "cursor"
+			// let added = [];
+			// let modified = [];
+			// // Removed transaction ids
+			// let removed = [];
+			// let hasMore = true;
+			// // Iterate through each page of new transaction updates for item
+			// while (hasMore) {
+			// 	const request = {
+			// 		access_token: ACCESS_TOKEN,
+			// 		cursor: cursor,
+			// 	};
+			// 	const response = await client.transactionsSync(request);
+			// 	const data = response.data;
+			// 	// Add this page of results
+			// 	added = added.concat(data.added);
+			// 	modified = modified.concat(data.modified);
+			// 	removed = removed.concat(data.removed);
+			// 	hasMore = data.has_more;
+			// 	// Update cursor to the next cursor
+			// 	cursor = data.next_cursor;
+			// 	// prettyPrintResponse(response);
+			// }
 
-			const compareTxnsByDateAscending = (a, b) =>
-				(a.date > b.date) - (a.date < b.date);
-			// Return the 8 most recent transactions
-			const recently_added = [...added]
-				.sort(compareTxnsByDateAscending)
-				.slice(-8);
-			response.json({ latest_transactions: recently_added });
+			// const compareTxnsByDateAscending = (a, b) =>
+			// 	(a.date > b.date) - (a.date < b.date);
+			// // Return the 8 most recent transactions
+			// const recently_added = [...added]
+			// 	.sort(compareTxnsByDateAscending)
+			// 	.slice(-8);
+			// response.json(data);
 		})
 		.catch(next);
 });

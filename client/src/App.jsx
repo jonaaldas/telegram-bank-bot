@@ -3,6 +3,7 @@ import axios from 'axios';
 import React, { useEffect, useState } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import './App.css';
+import BankCard from './components/BankCard';
 
 function App() {
 	const [token, setToken] = useState('');
@@ -21,21 +22,27 @@ function App() {
 	};
 
 	const onSuccess = async (/** @type {any} */ token) => {
-		await axios
-			.post('http://localhost:9000/api/set_access_token', {
+		// let bankDetails = await axios.post('http://localhost:9000/api/item/get');
+		let accessToken = await axios.post(
+			'http://localhost:9000/api/set_access_token',
+			{
 				data: token,
-			})
-			.then((res) => {
-				console.log('🚀 ~ file: App.jsx:29 ~ .then ~ res:', res);
-				setBanks((prev) => {
-					return [...prev, res.data];
-				});
-			});
+			}
+		);
+		// console.log(bankDetails);
+		// const jsonObject = JSON.parse(accessToken.data);
+		// console.log(jsonObject);
+		console.log(accessToken);
+
+		// setBanks((prev) => {
+		// 	return [...prev, accessToken.data];
+		// });
 	};
 
 	const getTransactions = async () => {
-		const data = await axios.post('http://localhost:9000/api/transactions');
-		console.log('🚀 ~ file: App.jsx:28 ~ getTransactions ~ data:', data);
+		const { data } = await axios.post('http://localhost:9000/api/transactions');
+
+		console.log('🚀 ~ file: App.jsx:39 ~ getTransactions ~ data:', data);
 	};
 
 	const getBankAccounts = async () => {
@@ -49,7 +56,8 @@ function App() {
 	const getInstitutionInfo = async () => {
 		await axios
 			.post('http://localhost:9000/api/item/get')
-			.then((data) => console.log(data));
+			.then((res) => res)
+			.catch((e) => console.log(e));
 	};
 
 	let isOauth = false;
@@ -67,12 +75,19 @@ function App() {
 
 	return (
 		<div className='App'>
-			<button onClick={() => open()} disabled={!ready}>
+			<button
+				type='button'
+				className='focus:outline-none text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 mr-2 mb-2 dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-800'
+				onClick={() => open()}
+				disabled={!ready}
+			>
 				Connect a bank account
 			</button>
 			<button onClick={() => getTransactions()}>Get my transactions</button>
 			<button onClick={() => getBankAccounts()}>Get my account info</button>
 			<button onClick={() => getInstitutionInfo()}>Get my Bank Info</button>
+
+			<BankCard />
 		</div>
 	);
 }
