@@ -1,3 +1,4 @@
+// @ts-nocheck
 const express = require('express');
 const axios = require('axios');
 require('dotenv').config();
@@ -102,122 +103,230 @@ app.post('/api/set_access_token', function (request, response, next) {
 	PUBLIC_TOKEN = request.body.data;
 	Promise.resolve()
 		.then(async function () {
+			const { name, institution_id } = request.body.metadata.institution;
+			const accountsPlaid = request.body.metadata.accounts;
 			const tokenResponse = await client.itemPublicTokenExchange({
 				public_token: PUBLIC_TOKEN,
 			});
-
-			// save data in a database link to user
 			ACCESS_TOKEN = tokenResponse.data.access_token;
 			ITEM_ID = tokenResponse.data.item_id;
-			const request = {
-				access_token: ACCESS_TOKEN,
+			NAME = name;
+			INSTITUTIONID = institution_id;
+			institutionName = {
+				NAME,
+				INSTITUTIONID,
 			};
-			const bankInfo = await client.itemGet(request);
-			// 	connection.query(
-			// 		`
-			// 		INSERT INTO bank_info.bank_token (bank_name, access_token, item_id)
-			// VALUES ('${title}', '${body}', ${id})
-			// 		`
-			// 	);
-			let information = JSON.parse(CircularJSON.stringify(bankInfo));
-			response.json({
-				// the 'access_token' is a private token, DO NOT pass this token to the frontend in your production environment
-				access_token: ACCESS_TOKEN,
-				item_id: ITEM_ID,
-				error: null,
-				...information.data.item,
-			});
-		})
-		.catch(next);
-});
 
-app.post('/api/transactions', async function (request, response, next) {
-	Promise.resolve()
-		.then(async function () {
-			const request = {
-				access_token: ACCESS_TOKEN,
-				cursor: null,
-			};
-			const res = await client.transactionsSync(request);
-			const data = res.data.added;
-			let date = moment(new Date()).subtract(1, 'day').format('YYYY-MM-DD');
-			let currentTransaction = data.filter(
-				(transaction) => transaction.authorized_date === date
+			// save bank information in DATABASE
+			connection.query(
+				`
+					INSERT INTO bank_info.bank_token (bank_name, access_token, item_id, institution_id)
+					VALUES ('${NAME}', '${ACCESS_TOKEN}', '${ITEM_ID}', '${INSTITUTIONID}')
+					ON DUPLICATE KEY UPDATE access_token=VALUES(access_token), item_id=VALUES(item_id), institution_id=VALUES(institution_id)
+				`,
+				(error, results) => {
+					if (error) {
+						if (error.code === 'ER_DUP_ENTRY') {
+							console.log('Error: Duplicate entry');
+						} else {
+							console.log(`Error: ${error}`);
+						}
+					} else {
+						console.log('Accounts Inserted successfully');
+					}
+				}
 			);
-			response.json(currentTransaction);
-			// // Set cursor to empty to receive all historical updates
-			// let cursor = null;
 
-			// // New transaction updates since "cursor"
-			// let added = [];
-			// let modified = [];
-			// // Removed transaction ids
-			// let removed = [];
-			// let hasMore = true;
-			// // Iterate through each page of new transaction updates for item
-			// while (hasMore) {
-			// 	const request = {
-			// 		access_token: ACCESS_TOKEN,
-			// 		cursor: cursor,
-			// 	};
-			// 	const response = await client.transactionsSync(request);
-			// 	const data = response.data;
-			// 	// Add this page of results
-			// 	added = added.concat(data.added);
-			// 	modified = modified.concat(data.modified);
-			// 	removed = removed.concat(data.removed);
-			// 	hasMore = data.has_more;
-			// 	// Update cursor to the next cursor
-			// 	cursor = data.next_cursor;
-			// 	// prettyPrintResponse(response);
-			// }
+			// Save each account information in the DB
+			accountsPlaid.forEach((account) => {
+				connection.query(
+					`
+						INSERT INTO bank_info.bank_accounts (account_id, mask, name, subtype, type, bank_name) 
+						VALUES ('${account.id}', '${account.mask}', '${account.name}', '${account.subtype}', '${account.type}', '${institutionName.NAME}')
+					`,
+					(error, results) => {
+						if (error) {
+							if (error.code === 'ER_DUP_ENTRY') {
+								console.log('Error: Duplicate entry');
+							} else {
+								console.log(`Error: ${error}`);
+							}
+						} else {
+							console.log('Bank token inserted successfully');
+						}
+					}
+				);
+			});
 
-			// const compareTxnsByDateAscending = (a, b) =>
-			// 	(a.date > b.date) - (a.date < b.date);
-			// // Return the 8 most recent transactions
-			// const recently_added = [...added]
-			// 	.sort(compareTxnsByDateAscending)
-			// 	.slice(-8);
-			// response.json(data);
+			// save all trasnaction from the las 24h in the database
+			saveTranToDB(institutionName);
+			// get balance
+			getBalance();
 		})
 		.catch(next);
 });
 
-app.post('/api/accounts/get', function (request, response, next) {
-	Promise.resolve()
-		.then(async function () {
-			const request = {
-				access_token: ACCESS_TOKEN,
-			};
-			try {
-				const res = await client.accountsGet(request);
-				const accounts = res.data.accounts;
-				response.json({
-					accounts,
-				});
-			} catch (error) {
-				// handle error
-				console.log(error);
-			}
-		})
-		.catch(next);
-});
+// get bank balances of accounts and add to data base as soon as access token is created
+const getBalance = async () => {
+	const request = {
+		access_token: ACCESS_TOKEN,
+	};
+	try {
+		const response = await client.accountsBalanceGet(request);
+		const accounts = response.data.accounts;
+		if (accounts.length >= 1) {
+			accounts.forEach((account) => {
+				connection.query(
+					`
+					INSERT INTO bank_info.bank_balance (bank_name,balance, account_id)
+					VALUES('${account.name}','${account.balances.current}', '${account.account_id}')
+					ON DUPLICATE KEY UPDATE balance = balance + VALUES(balance);
+					`,
+					(error, results) => {
+						if (error) {
+							if (error.code === 'ER_DUP_ENTRY') {
+								console.log('Error: Duplicate entry');
+							} else {
+								console.log(`Error: ${error}`);
+							}
+						} else {
+							console.log('Bank balances have been saved successfully');
+						}
+					}
+				);
+			});
+		}
+	} catch (error) {
+		// handle error
+		console.log(error);
+	}
+};
 
-app.post('/api/item/get', function (request, response, next) {
-	Promise.resolve().then(async function () {
-		const request = {
-			access_token: ACCESS_TOKEN,
-		};
-		try {
-			const res = await client.itemGet(request);
-			const item = res.data.item;
-			const status = res.data.status;
-			response.json(item);
-		} catch (error) {
-			// handle error
-			console.log(error);
+// save transactions into the data base
+const saveTranToDB = async (institutionName) => {
+	const transactionRequest = {
+		access_token: ACCESS_TOKEN,
+		cursor: null,
+	};
+	const plaidRes = await client.transactionsSync(transactionRequest);
+	const data = plaidRes.data.added;
+	let date = moment(new Date()).subtract(2, 'day').format('YYYY-MM-DD');
+
+	let currentTransaction = data.filter((transaction) => {
+		if (transaction.date == date) {
+			return transaction;
+		} else {
+			console.log('No matching transactinos');
 		}
 	});
+
+	currentTransaction.forEach((transaction) => {
+		connection.query(
+			`
+				INSERT INTO bank_info.last_purchases (account_id, purchase_name, purchase_amount, date)
+				VALUES ('${transaction.account_id}', '${transaction.merchant_name}', '${transaction.amount}', '${transaction.date}')
+			`,
+			(error, results) => {
+				if (error) {
+					console.log(error);
+				} else {
+					console.log('Transactions inserted successfully');
+				}
+			}
+		);
+	});
+};
+
+// get access tokens from BD
+const getBankAccessTokens = () => {
+	return new Promise((resolve, reject) => {
+		connection.query(
+			'SELECT access_token FROM bank_token',
+			(err, rows, fields) => {
+				if (err) {
+					reject(err);
+				} else {
+					resolve(rows);
+				}
+			}
+		);
+	});
+};
+
+// save transaction every 24h for every account
+app.get('/api/get/allInformation', async function (req, res, next) {
+	console.log('I am running all informaiton');
+	try {
+		const accessTokens = await getBankAccessTokens();
+
+		// Create an array of promises for all the transactionsSync() calls
+		const transactionPromises = accessTokens.map(async (accessToken) => {
+			const transactionRequest = {
+				access_token: accessToken.access_token,
+				cursor: null,
+			};
+			const plaidRes = await client.transactionsSync(transactionRequest);
+			return plaidRes.data.added;
+		});
+
+		// Wait for all the promises to resolve before continuing
+		const allTransactions = await Promise.all(transactionPromises);
+
+		// Combine all the data into a single array
+		const flatArr = allTransactions.flat();
+
+		// Filter the data based on the authorized_date for the last 30 days
+		const dayBefore = moment().subtract(1, 'days').format('YYYY-MM-DD');
+		const newData = flatArr.filter((transaction) => {
+			if (transaction.date == dayBefore) {
+				return transaction;
+			}
+		});
+
+		if (newData.length == 0) {
+			console.log('You did not spend money yesterday');
+			return;
+		}
+		// save last transaction to the db
+		if (newData.length >= 1) {
+			newData.forEach((transaction) => {
+				connection.query(
+					`
+						INSERT INTO bank_info.last_purchases (purchase_amount, date, purchase_name, account_id)
+						VALUES ('${transaction.amount}', '${transaction.date}', '${transaction.merchant_name}', '${transaction.account_id}')
+					`,
+					(error, results) => {
+						if (error) {
+							console.log(error);
+						} else {
+							console.log('24H transactions added');
+						}
+					}
+				);
+			});
+		}
+
+		// res.json(newData);
+	} catch (error) {
+		console.log(error);
+		res.status(500).json({ message: 'Internal Server Error' });
+	}
+});
+
+// get bank names
+app.get(`/api/get/bankInformation`, async function (req, res, next) {
+	try {
+		connection.query(
+			'SELECT bank_name FROM bank_token',
+			(err, rows, fields) => {
+				if (err) throw err;
+				res.send(rows);
+			}
+		);
+	} catch (error) {
+		console.log(error);
+		console.log('This is a bankInformation');
+	}
 });
 
 app.listen(port, () => {
