@@ -72,7 +72,7 @@ const configuration = new Configuration({
 const client = new PlaidApi(configuration);
 
 app.get('/', (req, res) => {
-	res.send('Hello World!');
+	res.send('Hello World!!!!');
 });
 
 // Create a link token with configs which we can then use to initialize Plaid Link client-side.
