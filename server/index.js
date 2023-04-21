@@ -1,20 +1,18 @@
 // @ts-nocheck
 const express = require('express');
-const axios = require('axios');
 require('dotenv').config();
-const {
-	Configuration,
-	PlaidApi,
-	Products,
-	PlaidEnvironments,
-} = require('plaid');
 const util = require('util');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const mysql = require('mysql');
 const app = express();
 const moment = require('moment');
 const CircularJSON = require('circular-json');
+const connection = require('./config/database.js');
+const {
+	client,
+	PLAID_PRODUCTS,
+	PLAID_COUNTRY_CODES,
+} = require('./config/plaid.js');
 app.use(
 	bodyParser.urlencoded({
 		extended: false,
@@ -24,52 +22,9 @@ app.use(bodyParser.json());
 app.use(cors());
 const port = 9000;
 
-const connection = mysql.createConnection({
-	host: 'localhost',
-	user: 'root',
-	password: 'Jona1995!',
-	database: 'bank_info',
-});
-
-connection.connect(function (err) {
-	if (err) throw err;
-});
-
-const PLAID_CLIENT_ID = process.env.PLAID_CLIENT_ID;
-const PLAID_SECRET = process.env.PLAID_SECRET;
-const PLAID_ENV = process.env.PLAID_ENV || 'sandbox';
-
-// We store the access_token in memory - in production, store it in a secure
-// persistent data store
 let ACCESS_TOKEN = null;
 let PUBLIC_TOKEN = null;
 let ITEM_ID = null;
-
-// PLAID_PRODUCTS is a comma-separated list of products to use when initializing
-// Link. Note that this list must contain 'assets' in order for the app to be
-// able to create and retrieve asset reports.
-const PLAID_PRODUCTS = (
-	process.env.PLAID_PRODUCTS || Products.Transactions
-).split(',');
-
-// PLAID_COUNTRY_CODES is a comma-separated list of countries for which users
-// will be able to select institutions from.
-const PLAID_COUNTRY_CODES = (process.env.PLAID_COUNTRY_CODES || 'US').split(
-	','
-);
-
-const configuration = new Configuration({
-	basePath: PlaidEnvironments[PLAID_ENV],
-	baseOptions: {
-		headers: {
-			'PLAID-CLIENT-ID': PLAID_CLIENT_ID,
-			'PLAID-SECRET': PLAID_SECRET,
-			'Plaid-Version': '2020-09-14',
-		},
-	},
-});
-
-const client = new PlaidApi(configuration);
 
 app.get('/', (req, res) => {
 	res.send('Hello World!!!!');
@@ -138,7 +93,7 @@ app.post('/api/set_access_token', function (request, response, next) {
 			);
 
 			// Save each account information in the DB
-			accountsPlaid.forEach((account) => {
+			accountsPlaid.forEach((account, index) => {
 				connection.query(
 					`
 						INSERT INTO bank_info.bank_accounts (account_id, mask, name, subtype, type, bank_name) 
@@ -210,7 +165,9 @@ const saveTranToDB = async (institutionName) => {
 	};
 	const plaidRes = await client.transactionsSync(transactionRequest);
 	const data = plaidRes.data.added;
-	let date = moment(new Date()).subtract(2, 'day').format('YYYY-MM-DD');
+	console.log('🚀 ~ file: index.js:213 ~ saveTranToDB ~ data:', data);
+	let date = moment(new Date()).subtract(7, 'day').format('YYYY-MM-DD');
+	console.log('🚀 ~ file: index.js:215 ~ saveTranToDB ~ date:', date);
 
 	let currentTransaction = data.filter((transaction) => {
 		if (transaction.date == date) {
@@ -219,6 +176,10 @@ const saveTranToDB = async (institutionName) => {
 			console.log('No matching transactinos');
 		}
 	});
+	console.log(
+		'🚀 ~ file: index.js:223 ~ currentTransaction ~ currentTransaction:',
+		currentTransaction
+	);
 
 	currentTransaction.forEach((transaction) => {
 		connection.query(
@@ -326,6 +287,77 @@ app.get(`/api/get/bankInformation`, async function (req, res, next) {
 	} catch (error) {
 		console.log(error);
 		console.log('This is a bankInformation');
+	}
+});
+
+// get all information form DB and send to FE
+app.get('/api/get/last-transactions', async function (req, res) {
+	try {
+		connection.query(
+			`
+				SELECT
+					bank_accounts.bank_name,
+					bank_accounts.name,
+					bank_accounts.account_id,
+					last_purchases.purchase_amount,
+					last_purchases.date,
+					last_purchases.purchase_name
+				FROM
+					bank_accounts
+					LEFT JOIN last_purchases ON last_purchases.account_id = bank_accounts.account_id
+				WHERE
+					last_purchases.created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY);
+			`,
+			(err, rows, fields) => {
+				if (err) throw err;
+				res.send(rows);
+			}
+		);
+	} catch (error) {
+		console.log(error);
+	}
+});
+
+// get last balances
+app.get('/api/get/balance', async function (req, res) {
+	try {
+		const accessTokens = await getBankAccessTokens();
+
+		// Create an array of promises for all the transactionsSync() calls
+		const balancePromises = accessTokens.map(async (accessToken) => {
+			const balanceRequest = {
+				access_token: accessToken.access_token,
+			};
+			const plaidRes = await client.accountsBalanceGet(balanceRequest);
+
+			// return plaidRes.data.accounts.balances.current;
+			return plaidRes.data.accounts;
+		});
+
+		// Wait for all the promises to resolve before continuing
+		const allBalances = (await Promise.all(balancePromises)).flat();
+
+		// save to database updated balances
+		if (allBalances.length >= 1) {
+			allBalances.map((account) => {
+				connection.query(
+					`
+				INSERT INTO bank_info.bank_balance (bank_name, balance, account_id) 
+				VALUES ('${account.name}', '${account.balances.current}', '${account.account_id}')
+				ON DUPLICATE KEY UPDATE balance = VALUES(balance);
+					`,
+					(error, results) => {
+						if (error) {
+							console.log(error);
+						} else {
+							console.log(results);
+						}
+					}
+				);
+			});
+		}
+	} catch (error) {
+		// handle error
 	}
 });
 
