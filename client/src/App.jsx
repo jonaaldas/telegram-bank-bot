@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import './App.css';
 import BankCard from './components/BankCard';
+import BankStats from './components/BankStats';
+import BankTransactions from './components/BankTransactions';
 
 function App() {
 	const [token, setToken] = useState('');
@@ -22,26 +24,20 @@ function App() {
 		setToken(data.link_token);
 	};
 
-	const onSuccess = async (/** @type {any} */ token, metadata) => {
-		let accessToken = await axios.post(
-			'http://localhost:9000/api/set_access_token',
-			{
+	const onSuccess = async (token, metadata) => {
+		try {
+			await axios.post('http://localhost:9000/api/set_access_token', {
 				data: token,
 				metadata: metadata,
-			}
-		);
-		console.log(
-			'🚀 ~ file: App.jsx:32 ~ onSuccess ~ accessToken:',
-			accessToken
-		);
+			});
+		} catch (error) {
+			console.log('There has been an error');
+		}
 	};
 
 	const init = () => {
-		// gets all transactions from the last day and all balances for the last 24H
-		axios
-			.get(`${link}/get/allInformation`)
-			.then((res) => console.log(res))
-			.catch((error) => console.log(error));
+		// getLastTransactionsFromDB();
+		saveLast24hTransactionIntoDB();
 	};
 
 	const getBankNameFromDB = async () => {
@@ -49,27 +45,13 @@ function App() {
 		setBanks(data);
 	};
 
-	// const getTransactions = async () => {
-	// 	const { data } = await axios.post('http://localhost:9000/api/transactions');
-	// 	console.log('I am running');
-
-	// 	console.log('🚀 ~ file: App.jsx:39 ~ getTransactions ~ data:', data);
-	// };
-
-	// const getBankAccounts = async () => {
-	// 	await axios
-	// 		.post('http://localhost:9000/api/accounts/get', {
-	// 			data: banks[0].access_token,
-	// 		})
-	// 		.then((data) => console.log(data));
-	// };
-
-	// const getInstitutionInfo = async () => {
-	// 	await axios
-	// 		.post('http://localhost:9000/api/item/get')
-	// 		.then((res) => res)
-	// 		.catch((e) => console.log(e));
-	// };
+	const saveLast24hTransactionIntoDB = async () => {
+		// gets all transactions from the last day and all balances for the last 24H
+		axios
+			.get(`${link}/get/allInformation`)
+			.then((res) => console.log(res))
+			.catch((error) => console.log(error));
+	};
 
 	let isOauth = false;
 	const config = {
@@ -88,19 +70,31 @@ function App() {
 	}, [banks]);
 
 	return (
-		<div className='App'>
-			<button
-				type='button'
-				className='focus:outline-none text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 mr-2 mb-2 dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-800'
-				onClick={() => open()}
-				disabled={!ready}
-			>
-				Connect a bank account
-			</button>
+		<div className='flex flex-col items-center space-y-12'>
+			<div className='md:w-3/4 lg:w-1/2'>
+				<div className='flex flex-row w-full justify-center'>
+					<button
+						type='button'
+						className='btn bg-primary text-xs mr-3'
+						onClick={() => open()}
+						disabled={!ready}
+					>
+						Connect a bank account
+					</button>
 
-			<button onClick={init}>INIT</button>
+					<button
+						type='button'
+						className='btn btn-secondary'
+						onClick={() => init()}
+					>
+						Get last Transactions
+					</button>
+				</div>
 
-			<BankCard bankName={{ banks }} />
+				<BankCard bankName={{ banks }} />
+				<BankStats />
+				<BankTransactions />
+			</div>
 		</div>
 	);
 }
