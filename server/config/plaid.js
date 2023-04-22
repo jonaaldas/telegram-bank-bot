@@ -1,3 +1,4 @@
+require('dotenv').config();
 const {
 	Configuration,
 	PlaidApi,
@@ -5,7 +6,8 @@ const {
 	PlaidEnvironments,
 } = require('plaid');
 
-const PLAID_CLIENT_ID = process.env.PLAID_CLIENT_ID;
+const PLAID_CLIENT_ID =
+	process.env.PLAID_CLIENT_ID || '629f5a69cf8c140015fc91ed';
 const PLAID_SECRET = process.env.PLAID_SECRET;
 const PLAID_ENV = process.env.PLAID_ENV || 'sandbox';
 

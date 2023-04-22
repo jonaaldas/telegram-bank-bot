@@ -7,7 +7,7 @@ const BankTransactions = () => {
 	const getLastTransactionsFromDB = async () => {
 		console.log('Fetching last transactions...');
 		await axios
-			.get(`${link}/get/last-transactions`)
+			.get(`${link}/get_last_transactions`)
 			.then((data) => setTransactions(data.data))
 			.catch((e) => console.log(e));
 	};
