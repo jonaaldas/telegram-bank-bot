@@ -199,43 +199,56 @@ module.exports = {
 
 			if (newData.length == 0) {
 				console.log('You did not spend money yesterday');
-				return;
+				return true;
 			}
 
 			if (newData.length >= 1) {
-				newData.forEach((transaction) => {
-					connection.query(
-						`
-						INSERT INTO bank_info.last_purchases (purchase_amount, date, purchase_name, account_id)
-						VALUES ('${transaction.amount}', '${transaction.date}', '${transaction.merchant_name}', '${transaction.account_id}')
-					`,
-						(error, results) => {
-							if (error) {
-								console.log(error);
-							} else {
-								console.log('24H transactions added');
+				const promises = newData.map((transaction) => {
+					return new Promise((resolve, reject) => {
+						connection.query(
+							`
+        INSERT INTO bank_info.last_purchases (purchase_amount, date, purchase_name, account_id)
+        VALUES ('${transaction.amount}', '${transaction.date}', '${transaction.merchant_name}', '${transaction.account_id}')
+      `,
+							(error, results) => {
+								if (error) {
+									reject(error);
+								} else {
+									resolve(results);
+								}
 							}
-						}
-					);
+						);
+					});
 				});
+
+				await Promise.all(promises);
+
+				return true;
 			}
 		} catch (error) {
 			console.log(error);
-			res.status(500).json({ message: 'Internal Server Error' });
+			return false;
 		}
+
+		return false;
 	},
+	// Define a function that returns a Promise
 	getBankNames: async (req, res) => {
 		try {
-			connection.query(
-				'SELECT bank_name FROM bank_token',
-				(err, rows, fields) => {
-					if (err) throw err;
-					res.send(rows);
-				}
-			);
+			const bankNames = await new Promise((resolve, reject) => {
+				connection.query(
+					'SELECT bank_name FROM bank_token',
+					(err, rows, fields) => {
+						if (err) reject(err);
+						resolve(rows);
+					}
+				);
+			});
+			res.send(bankNames);
+			// return bankNames;
 		} catch (error) {
 			console.log(error);
-			console.log('This is a bankInformation');
+			res.status(500).send('Internal Server Error');
 		}
 	},
 	getAllTransactionIn24h: async (req, res) => {
@@ -264,6 +277,42 @@ module.exports = {
 			console.log(error);
 		}
 	},
+	// saveBalanceInDB: async (req, res) => {
+	// 	try {
+	// 		const accessTokens = await getBankAccessTokens();
+
+	// 		const balancePromises = accessTokens.map(async (accessToken) => {
+	// 			const balanceRequest = {
+	// 				access_token: accessToken.access_token,
+	// 			};
+	// 			const plaidRes = await client.accountsBalanceGet(balanceRequest);
+
+	// 			return plaidRes.data.accounts;
+	// 		});
+
+	// 		const allBalances = (await Promise.all(balancePromises)).flat();
+
+	// 		if (allBalances.length >= 1) {
+	// 			allBalances.map((account) => {
+	// 				connection.query(
+	// 					`
+	// 			INSERT INTO bank_info.bank_balance (bank_name, balance, account_id)
+	// 			VALUES ('${account.name}', '${account.balances.current}', '${account.account_id}')
+	// 			ON DUPLICATE KEY UPDATE balance = VALUES(balance);
+	// 				`,
+	// 					(error, results) => {
+	// 						if (error) {
+	// 							console.log(error);
+	// 						}
+	// 					}
+	// 				);
+	// 			});
+
+	// 		}
+	// 	} catch (error) {
+	// 		console.log(error);
+	// 	}
+	// },
 	saveBalanceInDB: async (req, res) => {
 		try {
 			const accessTokens = await getBankAccessTokens();
@@ -280,27 +329,36 @@ module.exports = {
 			const allBalances = (await Promise.all(balancePromises)).flat();
 
 			if (allBalances.length >= 1) {
-				allBalances.map((account) => {
-					connection.query(
-						`
-				INSERT INTO bank_info.bank_balance (bank_name, balance, account_id) 
-				VALUES ('${account.name}', '${account.balances.current}', '${account.account_id}')
-				ON DUPLICATE KEY UPDATE balance = VALUES(balance);
-					`,
-						(error, results) => {
-							if (error) {
-								console.log(error);
-							} else {
-								console.log(results);
+				const promises = allBalances.map((account) => {
+					return new Promise((resolve, reject) => {
+						connection.query(
+							`
+            INSERT INTO bank_info.bank_balance (bank_name, balance, account_id)
+            VALUES ('${account.name}', '${account.balances.current}', '${account.account_id}')
+            ON DUPLICATE KEY UPDATE balance = VALUES(balance);
+            `,
+							(error, results) => {
+								if (error) {
+									reject(error);
+								} else {
+									resolve(results);
+								}
 							}
-						}
-					);
+						);
+					});
 				});
+
+				await Promise.all(promises);
+
+				return true;
 			}
 		} catch (error) {
 			console.log(error);
 		}
+
+		return false;
 	},
+
 	getTotalBalanceDB: async (req, res) => {
 		try {
 			connection.query(
