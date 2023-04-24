@@ -41,14 +41,14 @@ function App() {
 	};
 
 	const getBankNameFromDB = async () => {
-		let { data } = await axios.get(`${link}/get/bankInformation`);
+		let { data } = await axios.get(`${link}/get_bank_names`);
 		setBanks(data);
 	};
 
 	const saveLast24hTransactionIntoDB = async () => {
 		// gets all transactions from the last day and all balances for the last 24H
 		axios
-			.get(`${link}/get/allInformation`)
+			.get(`${link}/save_transactions_24`)
 			.then((res) => console.log(res))
 			.catch((error) => console.log(error));
 	};
