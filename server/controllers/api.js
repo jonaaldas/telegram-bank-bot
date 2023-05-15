@@ -4,12 +4,15 @@ const {
 	PLAID_COUNTRY_CODES,
 } = require('../config/plaid.js');
 const connection = require('../config/database.js');
+const PlanetScale = require('../config/planetScaleDB.js');
 const moment = require('moment');
 let ACCESS_TOKEN = null;
 let PUBLIC_TOKEN = null;
 let ITEM_ID = null;
 let NAME = null;
 let INSTITUTIONID = null;
+let databaseName = 'bank_info';
+let planetSacelDatabaseName = 'bank_bot';
 
 const getBalance = async () => {
 	const request = {
@@ -20,9 +23,9 @@ const getBalance = async () => {
 		const accounts = response.data.accounts;
 		if (accounts.length >= 1) {
 			accounts.forEach((account) => {
-				connection.query(
+				PlanetScale.query(
 					`
-					INSERT INTO bank_info.bank_balance (bank_name,balance, account_id)
+					INSERT INTO ${planetSacelDatabaseName}.bank_balance (bank_name,balance, account_id)
 					VALUES('${account.name}','${account.balances.current}', '${account.account_id}')
 					ON DUPLICATE KEY UPDATE balance = balance + VALUES(balance);
 					`,
@@ -62,9 +65,9 @@ const saveAllTransactionsDB = async () => {
 		}
 	});
 	currentTransaction.forEach((transaction) => {
-		connection.query(
+		PlanetScale.query(
 			`
-				INSERT INTO bank_info.last_purchases (account_id, purchase_name, purchase_amount, date)
+				INSERT INTO ${planetSacelDatabaseName}.last_purchases (account_id, purchase_name, purchase_amount, date)
 				VALUES ('${transaction.account_id}', '${transaction.merchant_name}', '${transaction.amount}', '${transaction.date}')
 			`,
 			(error, results) => {
@@ -80,7 +83,7 @@ const saveAllTransactionsDB = async () => {
 
 const getBankAccessTokens = () => {
 	return new Promise((resolve, reject) => {
-		connection.query(
+		PlanetScale.query(
 			'SELECT access_token FROM bank_token',
 			(err, rows, fields) => {
 				if (err) {
@@ -130,9 +133,9 @@ module.exports = {
 				NAME,
 				INSTITUTIONID,
 			};
-			connection.query(
+			PlanetScale.query(
 				`
-					INSERT INTO bank_info.bank_token (bank_name, access_token, item_id, institution_id)
+					INSERT INTO ${planetSacelDatabaseName}.bank_token (bank_name, access_token, item_id, institution_id)
 					VALUES ('${NAME}', '${ACCESS_TOKEN}', '${ITEM_ID}', '${INSTITUTIONID}')
 					ON DUPLICATE KEY UPDATE access_token=VALUES(access_token), item_id=VALUES(item_id), institution_id=VALUES(institution_id)
 				`,
@@ -149,9 +152,9 @@ module.exports = {
 				}
 			);
 			accountsPlaid.forEach((account, index) => {
-				connection.query(
+				PlanetScale.query(
 					`
-						INSERT INTO bank_info.bank_accounts (account_id, mask, name, subtype, type, bank_name) 
+						INSERT INTO ${planetSacelDatabaseName}.bank_accounts (account_id, mask, name, subtype, type, bank_name) 
 						VALUES ('${account.id}', '${account.mask}', '${account.name}', '${account.subtype}', '${account.type}', '${institutionName.NAME}')
 					`,
 					(error, results) => {
@@ -205,9 +208,9 @@ module.exports = {
 			if (newData.length >= 1) {
 				const promises = newData.map((transaction) => {
 					return new Promise((resolve, reject) => {
-						connection.query(
+						PlanetScale.query(
 							`
-        INSERT INTO bank_info.last_purchases (purchase_amount, date, purchase_name, account_id)
+        INSERT INTO ${planetSacelDatabaseName}.last_purchases (purchase_amount, date, purchase_name, account_id)
         VALUES ('${transaction.amount}', '${transaction.date}', '${transaction.merchant_name}', '${transaction.account_id}')
       `,
 							(error, results) => {
@@ -236,7 +239,7 @@ module.exports = {
 	getBankNames: async (req, res) => {
 		try {
 			const bankNames = await new Promise((resolve, reject) => {
-				connection.query(
+				PlanetScale.query(
 					'SELECT bank_name FROM bank_token',
 					(err, rows, fields) => {
 						if (err) reject(err);
@@ -253,7 +256,7 @@ module.exports = {
 	},
 	getAllTransactionIn24h: async (req, res) => {
 		try {
-			connection.query(
+			PlanetScale.query(
 				`
 				SELECT
 					bank_accounts.bank_name,
@@ -294,9 +297,9 @@ module.exports = {
 
 	// 		if (allBalances.length >= 1) {
 	// 			allBalances.map((account) => {
-	// 				connection.query(
+	// 				PlanetScale.query(
 	// 					`
-	// 			INSERT INTO bank_info.bank_balance (bank_name, balance, account_id)
+	// 			INSERT INTO ${planetSacelDatabaseName}.bank_balance (bank_name, balance, account_id)
 	// 			VALUES ('${account.name}', '${account.balances.current}', '${account.account_id}')
 	// 			ON DUPLICATE KEY UPDATE balance = VALUES(balance);
 	// 				`,
@@ -331,9 +334,9 @@ module.exports = {
 			if (allBalances.length >= 1) {
 				const promises = allBalances.map((account) => {
 					return new Promise((resolve, reject) => {
-						connection.query(
+						PlanetScale.query(
 							`
-            INSERT INTO bank_info.bank_balance (bank_name, balance, account_id)
+            INSERT INTO ${planetSacelDatabaseName}.bank_balance (bank_name, balance, account_id)
             VALUES ('${account.name}', '${account.balances.current}', '${account.account_id}')
             ON DUPLICATE KEY UPDATE balance = VALUES(balance);
             `,
@@ -361,7 +364,7 @@ module.exports = {
 
 	getTotalBalanceDB: async (req, res) => {
 		try {
-			connection.query(
+			PlanetScale.query(
 				`
         SELECT 
           SUM(CASE WHEN bank_name LIKE '%checking%' THEN balance ELSE 0 END) AS total_checking,
