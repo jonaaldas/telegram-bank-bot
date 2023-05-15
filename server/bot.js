@@ -8,10 +8,10 @@ const {
 	saveBalanceInDB,
 } = require('./controllers/api.js');
 const connection = require('./config/database');
-
+const PlanetScale = require('./config/planetScaleDB');
 const getLastSpendetureFromDb = async () => {
 	return new Promise((resolve, reject) => {
-		connection.query(
+		PlanetScale.query(
 			`
         SELECT purchase_amount, last_purchases.date as date_spend, purchase_name, bank_accounts.bank_name as bank_name
         FROM last_purchases
@@ -31,7 +31,7 @@ const getLastSpendetureFromDb = async () => {
 
 const getTotalBalanceFromDB = () => {
 	return new Promise((resolve, reject) => {
-		connection.query(
+		PlanetScale.query(
 			`
       SELECT 
       SUM(CASE WHEN bank_name LIKE '%checking%' THEN balance ELSE 0 END) AS total_checking,
@@ -52,7 +52,7 @@ const getTotalBalanceFromDB = () => {
 
 const getEachBankBalanceFromDB = () => {
 	return new Promise((resolve, reject) => {
-		connection.query(
+		PlanetScale.query(
 			`
       SELECT bank_name, balance
       FROM bank_balance
@@ -133,5 +133,5 @@ const runJob = () => {
 			console.log('Error while updating database:', error);
 		});
 };
-
-cron.schedule('0 9 * * *', runJob);
+runJob();
+// cron.schedule('0 9 * * *', runJob);
