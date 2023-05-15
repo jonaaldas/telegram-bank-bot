@@ -133,5 +133,4 @@ const runJob = () => {
 			console.log('Error while updating database:', error);
 		});
 };
-runJob();
-// cron.schedule('0 9 * * *', runJob);
+cron.schedule('0 9 * * *', runJob);
