@@ -133,4 +133,7 @@ const runJob = () => {
 			console.log('Error while updating database:', error);
 		});
 };
-cron.schedule('0 9 * * *', runJob);
+cron.schedule('0 9 * * *', runJob, {
+	scheduled: true,
+	timezone: 'Australia/North',
+});

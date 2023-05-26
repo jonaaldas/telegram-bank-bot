@@ -280,42 +280,6 @@ module.exports = {
 			console.log(error);
 		}
 	},
-	// saveBalanceInDB: async (req, res) => {
-	// 	try {
-	// 		const accessTokens = await getBankAccessTokens();
-
-	// 		const balancePromises = accessTokens.map(async (accessToken) => {
-	// 			const balanceRequest = {
-	// 				access_token: accessToken.access_token,
-	// 			};
-	// 			const plaidRes = await client.accountsBalanceGet(balanceRequest);
-
-	// 			return plaidRes.data.accounts;
-	// 		});
-
-	// 		const allBalances = (await Promise.all(balancePromises)).flat();
-
-	// 		if (allBalances.length >= 1) {
-	// 			allBalances.map((account) => {
-	// 				PlanetScale.query(
-	// 					`
-	// 			INSERT INTO ${planetSacelDatabaseName}.bank_balance (bank_name, balance, account_id)
-	// 			VALUES ('${account.name}', '${account.balances.current}', '${account.account_id}')
-	// 			ON DUPLICATE KEY UPDATE balance = VALUES(balance);
-	// 				`,
-	// 					(error, results) => {
-	// 						if (error) {
-	// 							console.log(error);
-	// 						}
-	// 					}
-	// 				);
-	// 			});
-
-	// 		}
-	// 	} catch (error) {
-	// 		console.log(error);
-	// 	}
-	// },
 	saveBalanceInDB: async (req, res) => {
 		try {
 			const accessTokens = await getBankAccessTokens();
