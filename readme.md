@@ -1,4 +1,4 @@
-# Telegram Bank Text
+# Telegram Bank Bot
 
 I check my bank accounts every day, and it can become cumbersome or easy to
 forget. To simplify the process, I've built the Telegram Bank Text app. It
